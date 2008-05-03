@@ -20,6 +20,10 @@ port     1080
 my @options=qw(port|p=i timeout|w=i source|s=s verbose|v+ debug);
 if(!GetOptions(\%options, @options)) {die "invalid option on commandline. @ARGV\n"}
 my @opts;
+my @serveropts;
+if($options{source}) {
+	push(@serveropts, "host", $options{source});
+}
 
 sub diag($)
 {
@@ -110,5 +114,5 @@ sub process_request {
 
 #daemonize( 'nobody', 'nobody', 'socks5d.pid');
 
-__PACKAGE__->run(port => $options{port});
+__PACKAGE__->run(port => $options{port}, @serveropts);
 
