@@ -40,6 +40,11 @@ sub diag($)
 sub myread
 { sysread($_[0], $_[1], $_[2]); }
 
+sub binip4tostr($)
+{ my($ip)=@_;
+	return sprintf("%i.%i.%i.%i", (($ip>>24)&0xff), (($ip>>16)&0xff), (($ip>>8)&0xff), ($ip&0xff))
+}
+
 sub process_request {
 	diag "accepted";
 	my $head;
@@ -47,7 +52,24 @@ sub process_request {
 	my $outsocket;
 	myread($fd, $head, 1);
 	if(ord($head)==4) {
-		diag("socks4 - TODO");
+		diag("socks4");
+		myread($fd, $head, 700);
+		my($req, $pport, $ip, $username, $paddr)=unpack("CnNZ*Z*", $head);
+		if($req==1) {
+			diag("ip:$ip :$pport $username $paddr");
+			if($ip<256) {
+				diag("socks4a");
+			} else {
+				$paddr=binip4tostr($ip);
+			}
+			$outsocket=IO::Socket::INET6->new(@opts, PeerAddr=>$paddr, PeerPort=>$pport, Timeout=>$options{timeout});
+			if(!$outsocket) {
+				diag("error connecting: $!");
+				print("\x00\x5b",pack("n",$pport),"\x00\x00\x00\x00");
+				return;
+			}
+			print("\x00\x5a",pack("n",$pport),"\x00\x00\x00\x00");
+		}
 	} elsif(ord($head)==5) {
 		diag("socks5");
 		# myread auth methods supported by client
@@ -56,15 +78,22 @@ sub process_request {
 		# always choose "none" auth
 		print "\x05\x00";
 		# myread a request
-		myread($fd, $head, 5);
-		my($ver,$req, $res1, $addrtype, $size)=unpack("C*", $head);
+		myread($fd, $head, 4);
+		my($ver,$req, $res1, $addrtype)=unpack("C*", $head);
 		if($ver==5 and $req==1) {
 			my $paddr;
 			my $pport;
 			if($addrtype==3) { # domain name
+				myread($fd, $head, 1);
+				my $size=ord($head);
 				myread($fd, $paddr, $size);
 				myread($fd, $pport, 2);
 				$pport=unpack("n", $pport);
+			} elsif($addrtype==1) {
+				myread($fd, $head, 6);
+				my $ip;
+				($ip, $pport)=unpack("Nn", $head);
+				$paddr=binip4tostr($ip);
 			}
 			diag("connection request for $paddr:$pport");
 			if($paddr) {
@@ -81,7 +110,7 @@ sub process_request {
 					# causes assertion in dante-client-1.1.19
 					#$addrtype=4;
 					#$paddr=$outsocket->sockaddr();
-					$paddr=chr($size).$paddr
+					$paddr=chr(length($paddr)).$paddr;
 				} else {
 					$addrtype=1;
 					$paddr=$outsocket->sockaddr();
@@ -110,7 +139,6 @@ sub process_request {
 			last
 		}
 		foreach my $f (@ready) {
-			my $wfd= (($fd == $f)?$outsocket : $fd);
 			my $data;
 			my $numbytes=sysread($f, $data, 65000);
 			if(!$numbytes) { 
@@ -122,6 +150,7 @@ sub process_request {
 				diag("Internal side closed connection. Waiting $options{timeout} seconds for responses.");
 				$willexit++; $sel->remove($f); close($f); $exittime||=[gettimeofday()]; next; 
 			}
+			my $wfd= (($fd == $f)?$outsocket : \*STDOUT); # fd to write to
 			syswrite($wfd, $data, $numbytes);
 		}
 	}
