@@ -14,15 +14,20 @@ our @ISA = qw(Net::Server::Fork);
 
 
 my %options=qw(
-timeout	1
+timeout	3
 port     1080
 );
 my @options=qw(port|p=i timeout|w=i source|s=s verbose|v+ debug);
 if(!GetOptions(\%options, @options)) {die "invalid option on commandline. @ARGV\n"}
 my @opts;
-my @serveropts;
+my @serveropts=(port=>$options{port});
 if($options{source}) {
 	push(@serveropts, "host", $options{source});
+}
+if(!$options{debug}) {
+	push(@serveropts, "background", 1);
+} else {
+	push(@serveropts, "debug", 1);
 }
 
 sub diag($)
@@ -70,8 +75,18 @@ sub process_request {
 					print "\x05\x05";
 					return;
 				}
-				diag("success: established connection");
-				print "\x05\x00\x00",chr($addrtype),chr($size),$paddr,pack("n",$pport);
+				my $laddr=$outsocket->sockhost();
+				diag("success: established connection from $laddr");
+				if($laddr=~m/:/) {
+					# causes assertion in dante-client-1.1.19
+					#$addrtype=4;
+					#$paddr=$outsocket->sockaddr();
+					$paddr=chr($size).$paddr
+				} else {
+					$addrtype=1;
+					$paddr=$outsocket->sockaddr();
+				}
+				print("\x05\x00\x00",chr($addrtype),$paddr,pack("n",$outsocket->sockport()));
 			}
 		}
 	} elsif($head eq "G" or $head eq "H") {
@@ -114,5 +129,5 @@ sub process_request {
 
 #daemonize( 'nobody', 'nobody', 'socks5d.pid');
 
-__PACKAGE__->run(port => $options{port}, @serveropts);
+__PACKAGE__->run(@serveropts);
 
