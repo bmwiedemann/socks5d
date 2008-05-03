@@ -2,6 +2,7 @@
 use strict;
 # Copyright 2008 Bernhard M. Wiedemann
 # Licensed under GNU GPL - use, copy, modify as you like
+# this code partially implements RFC 3089 (A SOCKS-based IPv6/IPv4 Gateway Mechanism)
 
 use Getopt::Long;
 use Time::HiRes qw(gettimeofday tv_interval);
@@ -95,7 +96,7 @@ sub process_request {
 				($ip, $pport)=unpack("Nn", $head);
 				$paddr=binip4tostr($ip);
 			}
-			diag("connection request for $paddr:$pport");
+			diag("connection request for $paddr port $pport");
 			if($paddr) {
 				$outsocket=IO::Socket::INET6->new(@opts, PeerAddr=>$paddr, PeerPort=>$pport, Timeout=>$options{timeout});
 				if(!$outsocket) {
