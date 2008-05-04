@@ -45,6 +45,18 @@ sub binip4tostr($)
 { my($ip)=@_;
 	return sprintf("%i.%i.%i.%i", (($ip>>24)&0xff), (($ip>>16)&0xff), (($ip>>8)&0xff), ($ip&0xff))
 }
+sub binip6tostr($)
+{ my($ip)=@_;
+	my(@a)=unpack("C*",$ip);
+	my $n=0;
+	my $str="";
+	foreach my $byte (@a) {
+		$str.=sprintf("%02X", $byte);
+		if($n%2 && $n<15) {$str.=":"}
+		$n++;
+	}
+	return $str;
+}
 
 sub process_request {
 	diag "accepted";
@@ -57,12 +69,12 @@ sub process_request {
 		myread($fd, $head, 700);
 		my($req, $pport, $ip, $username, $paddr)=unpack("CnNZ*Z*", $head);
 		if($req==1) {
-			diag("ip:$ip :$pport $username $paddr");
 			if($ip<256) {
 				diag("socks4a");
 			} else {
 				$paddr=binip4tostr($ip);
 			}
+			diag("ip:$ip :$pport $username $paddr");
 			$outsocket=IO::Socket::INET6->new(@opts, PeerAddr=>$paddr, PeerPort=>$pport, Timeout=>$options{timeout});
 			if(!$outsocket) {
 				diag("error connecting: $!");
@@ -88,15 +100,16 @@ sub process_request {
 				myread($fd, $head, 1);
 				my $size=ord($head);
 				myread($fd, $paddr, $size);
-				myread($fd, $pport, 2);
-				$pport=unpack("n", $pport);
-			} elsif($addrtype==1) {
-				myread($fd, $head, 6);
-				my $ip;
-				($ip, $pport)=unpack("Nn", $head);
-				$paddr=binip4tostr($ip);
+			} elsif($addrtype==1) { # IPv4
+				myread($fd, $head, 4);
+				$paddr=binip4tostr(unpack("N", $head));
+			} elsif($addrtype==4) { # IPv6
+				myread($fd, $head, 16);
+				$paddr=binip6tostr($head);
 			}
-			diag("connection request for $paddr port $pport");
+			myread($fd, $pport, 2);
+			$pport=unpack("n", $pport);
+			diag("connection request for type $addrtype $paddr port $pport");
 			if($paddr) {
 				$outsocket=IO::Socket::INET6->new(@opts, PeerAddr=>$paddr, PeerPort=>$pport, Timeout=>$options{timeout});
 				if(!$outsocket) {
@@ -157,6 +170,7 @@ sub process_request {
 	}
 }
 
+#print binip6tostr("\xfe\x23\x45\x67\x12\x23\x45\x67\xab\xcd\xde\xef\x12\x23\x34\x45");
 #daemonize( 'nobody', 'nobody', 'socks5d.pid');
 
 __PACKAGE__->run(@serveropts);
