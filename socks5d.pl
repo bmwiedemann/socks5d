@@ -6,6 +6,8 @@ use strict;
 
 use Getopt::Long;
 use Time::HiRes qw(gettimeofday tv_interval);
+use Socket;
+use Socket6;
 use IO::Socket;
 use IO::Socket::INET6;
 use IO::Select;
@@ -43,23 +45,16 @@ sub myread
 
 sub binip4tostr($)
 { my($ip)=@_;
-	return sprintf("%i.%i.%i.%i", (($ip>>24)&0xff), (($ip>>16)&0xff), (($ip>>8)&0xff), ($ip&0xff))
+	return inet_ntoa($ip);
 }
 sub binip6tostr($)
 { my($ip)=@_;
-	my(@a)=unpack("C*",$ip);
-	my $n=0;
-	my $str="";
-	foreach my $byte (@a) {
-		$str.=sprintf("%02X", $byte);
-		if($n%2 && $n<15) {$str.=":"}
-		$n++;
-	}
-	return $str;
+	return inet_ntop(AF_INET6, $ip);
 }
 
 sub process_request {
-	diag "accepted";
+	my $self=shift;
+	diag "accepted ".$self->{server}->{peeraddr};
 	my $head;
 	my $fd=\*STDIN;
 	my $outsocket;
@@ -119,7 +114,8 @@ sub process_request {
 					return;
 				}
 				my $laddr=$outsocket->sockhost();
-				diag("success: established connection from $laddr");
+				my $lport=$outsocket->sockport();
+				diag("success: established connection from $laddr port $lport");
 				if($laddr=~m/:/) {
 					# causes assertion in dante-client-1.1.19
 					#$addrtype=4;
@@ -129,7 +125,7 @@ sub process_request {
 					$addrtype=1;
 					$paddr=$outsocket->sockaddr();
 				}
-				print("\x05\x00\x00",chr($addrtype),$paddr,pack("n",$outsocket->sockport()));
+				print("\x05\x00\x00",chr($addrtype),$paddr,pack("n",$lport));
 			}
 		}
 	} elsif($head eq "G" or $head eq "H") {
