@@ -4,6 +4,7 @@ use strict;
 # Licensed under GNU GPL - use, copy, modify as you like
 # this code partially implements RFC 3089 (A SOCKS-based IPv6/IPv4 Gateway Mechanism)
 
+use Carp;
 use Getopt::Long;
 use Time::HiRes qw(gettimeofday tv_interval);
 use Socket;
@@ -45,6 +46,7 @@ sub myread
 
 sub binip4tostr($)
 { my($ip)=@_;
+	confess if(length($ip)!=4);
 	return inet_ntoa($ip);
 }
 sub binip6tostr($)
