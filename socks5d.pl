@@ -69,7 +69,7 @@ sub process_request {
 			if($ip<256) {
 				diag("socks4a");
 			} else {
-				$paddr=binip4tostr($ip);
+				$paddr=binip4tostr(pack("N",$ip));
 			}
 			diag("ip:$ip :$pport $username $paddr");
 			$outsocket=IO::Socket::INET6->new(@opts, PeerAddr=>$paddr, PeerPort=>$pport, Timeout=>$options{timeout});
@@ -99,7 +99,7 @@ sub process_request {
 				myread($fd, $paddr, $size);
 			} elsif($addrtype==1) { # IPv4
 				myread($fd, $head, 4);
-				$paddr=binip4tostr(unpack("N", $head));
+				$paddr=binip4tostr($head);
 			} elsif($addrtype==4) { # IPv6
 				myread($fd, $head, 16);
 				$paddr=binip6tostr($head);
